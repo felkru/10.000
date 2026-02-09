@@ -199,10 +199,17 @@ export default function ZehntausendGame() {
                                 <button 
                                     onClick={handleRoll}
                                     disabled={gameState.status === 'farkle'}
-                                    className="flex-1 bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-4 rounded-xl shadow-lg transform transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                                    className={`flex-1 font-bold py-4 rounded-xl shadow-lg transform transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 
+                                        ${gameState.dice.every(d => d.state !== 'rolled') 
+                                            ? 'bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-white animate-pulse' 
+                                            : 'bg-yellow-500 hover:bg-yellow-400 text-black'}`}
                                 >
                                     <RefreshCw />
-                                    <span>{gameState.turnScore > 0 || gameState.currentKeepScore > 0 ? "Roll Remaining" : "Roll Dice"}</span>
+                                    <span>
+                                        {gameState.dice.every(d => d.state !== 'rolled') 
+                                            ? "HOT HAND! Roll 6!" 
+                                            : (gameState.turnScore > 0 || gameState.currentKeepScore > 0 ? "Roll Remaining" : "Roll Dice")}
+                                    </span>
                                 </button>
                                 
                                 <button 
@@ -250,6 +257,7 @@ export default function ZehntausendGame() {
                 <li><span className="text-white">Single 5:</span> 50 points</li>
                 <li><span className="text-white">Three 1s:</span> 1,000 points</li>
                 <li><span className="text-white">Three Xs:</span> X * 100 (e.g., three 2s = 200)</li>
+                <li><span className="text-white">Doubling:</span> 4-of-a-kind doubles the 3-kind score. 5-of-a-kind doubles again. 6-of-a-kind doubles again.</li>
             </ul>
 
             <h3 className="font-bold text-white mt-4">How to Play</h3>
@@ -259,7 +267,7 @@ export default function ZehntausendGame() {
                 <li>You can only keep scoring dice!</li>
                 <li><span className="text-green-400">Bank</span> points to end turn, or <span className="text-yellow-500">Roll Remaining</span> to risk it for more.</li>
                 <li><strong>Farkle:</strong> If you roll and get no points, you lose the turn's score!</li>
-                <li><strong>Hot Hand:</strong> If you use all 6 dice, you MUST roll all 6 again to continue accumulating!</li>
+                <li><strong>Hot Hand:</strong> If you use all 6 dice, you MUST <span className="text-yellow-500 font-bold">Roll All 6</span> again to continue accumulating!</li>
             </ol>
         </div>
       </Modal>

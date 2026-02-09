@@ -122,36 +122,49 @@ export class FarkleEngine {
 
         if (die.state === 'kept') {
              // UN-KEEP (Deselect)
-             // If this was part of a Triple, deselect all of that value that are 'kept'
-             // BUT, we need to be careful. What if I had 4, kept 3 (as triple), and deselect one?
-             // It breaks the triple.
              const val = die.value;
              const keptOfVal = this.dice.filter(d => d.value === val && d.state === 'kept');
-             
-             // If we unselect one from a group of 3+, unselect count-wise?
-             // Simplest approach: Deselect all of that value to avoid partial states.
              keptOfVal.forEach(d => d.state = 'rolled');
         } else {
             // KEEP (Select)
-            // Strict Validation: Must be scoring.
             const val = die.value;
             const rolledOfVal = this.dice.filter(d => d.value === val && d.state === 'rolled');
+            const keptOfVal = this.dice.filter(d => d.value === val && d.state === 'kept');
             
-            // Check 1: Is it a Triple candidate?
-            // If total rolled count of this value >= 3, we MUST select 3.
-            if (rolledOfVal.length >= 3) {
-                // Select 3 of them
-                const toSelect = rolledOfVal.slice(0, 3);
-                toSelect.forEach(d => d.state = 'kept');
-            } 
+            // Check 1: Is it part of a set >= 3?
+            if (rolledOfVal.length + keptOfVal.length >= 3) {
+                 // It contributes to a set.
+                 // If we have less than 3 kept, we should probably select enough to make 3 first?
+                 // Or just select this one?
+                 // Current UX: "Selecting one die of a triple will auto-select the others."
+                 
+                 // Strategy:
+                 // If kept < 3, select up to 3 (or all rolled if total < 3? No, total is >=3).
+                 // If kept >= 3, just select this one.
+                 
+                 if (keptOfVal.length < 3) {
+                     // Auto-select needed to form at least 3
+                     // We need (3 - kept) more.
+                     const needed = 3 - keptOfVal.length;
+                     // We prefer to select the clicked one + others
+                     const others = rolledOfVal.filter(d => d.id !== dieId);
+                     const toSelect = [die, ...others].slice(0, needed);
+                     
+                     // Wait, if I have 4 rolled, and I click one. kept=0. needed=3.
+                     // I select clicked + 2 others. Total 3 kept. 1 rolled.
+                     // Correct.
+                     toSelect.forEach(d => d.state = 'kept');
+                 } else {
+                     // Already have 3+, adding another doubles score
+                     die.state = 'kept';
+                 }
+            }
             // Check 2: Is it a 1 or 5?
             else if (val === 1 || val === 5) {
                 die.state = 'kept';
             }
-            // Else: Invalid (Single 2, 3, 4, 6)
+            // Else: Invalid
             else {
-                // Ignore click or flash error?
-                // For logic engine, just ignore.
                 return;
             }
         }
@@ -174,7 +187,6 @@ export class FarkleEngine {
         this.currentKeepScore = 0;
         this.dice.filter(d => d.state === 'kept').forEach(d => d.state = 'banked');
 
-        // Update Total
         this.players[this.currentPlayerIndex].score += this.turnScore;
         
         // Win Check
@@ -210,23 +222,27 @@ export class FarkleEngine {
         const counts = this.getCounts(dice);
         let score = 0;
         
-        // Logic: Account for banked dice? 
-        // No, 'kept' dice are evaluated in isolation for the current "selection".
-        // BUT, if I select 3x2, that's 200.
-        // If I select 1x1, that's 100.
-        // Total 300.
-        // My `toggleKeep` ensures we can only have valid "units" (Sets or Singles).
-        // So we can just sum them up.
-        
-        // Triples
+        // Triples and Doubling Rule
         for (let i = 1; i <= 6; i++) {
             let count = counts[i] || 0;
-            // Every group of 3 is a score
-            while (count >= 3) {
-                score += (i === 1 ? 1000 : i * 100);
-                count -= 3;
+            
+            if (count >= 3) {
+                // Base score for 3 dice
+                let base = (i === 1 ? 1000 : i * 100);
+                
+                // Doubling for each die beyond 3
+                // 3 dice: base * 2^0
+                // 4 dice: base * 2^1
+                // 5 dice: base * 2^2
+                // 6 dice: base * 2^3
+                let multiplier = 1 << (count - 3); // 2^(count-3)
+                score += base * multiplier;
+                
+                // All dice of this value are consumed by the set
+                count = 0;
             }
-            // Remaining are singles
+            
+            // Remaining are singles (only relevant if count < 3, i.e., 1s and 5s)
             if (i === 1) score += count * 100;
             if (i === 5) score += count * 50;
         }
@@ -245,65 +261,30 @@ export class FarkleEngine {
        }
        
        // AI Logic: Keep all scoring dice
-       // We can iterate values 1..6.
-       // If count >= 3, keeps 3.
-       // If 1 or 5, keep.
+       // With doubling rule, keeping 4, 5, 6 of a kind is always better.
        
        const rolled = this.dice.filter(d => d.state === 'rolled');
        const counts = this.getCounts(rolled);
-       
-       // Helper to find IDs
-       const findIds = (val: number, count: number): number[] => {
-           return rolled.filter(d => d.value === val).slice(0, count).map(d => d.id);
-       };
-
-       const idsToKeep: number[] = [];
-
-       for (let i = 1; i <= 6; i++) {
-           if ((counts[i] || 0) >= 3) {
-               idsToKeep.push(...findIds(i, 3));
-               counts[i] -= 3;
-               // Check again for 6x?
-               if ((counts[i] || 0) >= 3) {
-                   idsToKeep.push(...findIds(i, 3)); // Logic needs to pick *different* ids... slice handles this if we refilter?
-                   // Actually `findIds` works on implementation. 
-                   // `rolled.filter` returns new array. slice(0,3). 
-                   // If we call twice, we get same IDs.
-                   // BAD.
-                   // Simplification: AI keeps MAX scoring.
-               }
-           }
-       }
-       // Remaining 1s and 5s
-       // We need to exclude IDs already picked?
-       // Let's rely on standard loop
-       
-       // Better AI Loop:
-       let available = [...rolled]; // copy
        const aiKeeps: number[] = [];
        
-       const pull = (val: number, qty: number) => {
-           const found = available.filter(d => d.value === val).slice(0, qty);
-           found.forEach(d => {
-               aiKeeps.push(d.id);
-               // remove from available
-               const idx = available.findIndex(x => x.id === d.id);
-               if (idx > -1) available.splice(idx, 1);
-           });
+       const findIds = (val: number): number[] => {
+            return rolled.filter(d => d.value === val).map(d => d.id);
        };
-       
-       // 1. Triples
+
        for (let i = 1; i <= 6; i++) {
-           const matches = available.filter(d => d.value === i);
-           if (matches.length >= 3) {
-               pull(i, 3);
-               if (matches.length === 6) pull(i, 3);
+           const count = counts[i] || 0;
+           if (count >= 3) {
+               // Keep ALL of them
+               aiKeeps.push(...findIds(i));
+               counts[i] = 0; // Consumed
            }
        }
-       // 2. Singles
+       
+       // Singles
        [1, 5].forEach(val => {
-           const matches = available.filter(d => d.value === val);
-           matches.forEach(() => pull(val, 1));
+           if (counts[val] > 0) {
+                aiKeeps.push(...findIds(val)); 
+           }
        });
        
        // Apply
@@ -311,8 +292,6 @@ export class FarkleEngine {
            const d = this.dice.find(x => x.id === id);
            if (d) d.state = 'kept';
        });
-       
-       this.recalcKeepScore();
        
        this.recalcKeepScore();
        
