@@ -1,0 +1,129 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Zehntausend Custom Agent API",
+    "description": "API for implementing custom agents for the Zehntausend (10.000) game.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "Local development server example"
+    }
+  ],
+  "paths": {
+    "/move": {
+      "post": {
+        "summary": "Get the next move for a player",
+        "description": "The game engine sends the current state, and the agent must return the next move.",
+        "operationId": "getNextMove",
+        "requestBody": {
+          "description": "Current game state",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GameState"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The next move decided by the agent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentMove"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Illegal move or invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string", "description": "Description of the error" },
+          "validMoves": { 
+             "type": "array", 
+             "items": { "type": "string" },
+             "description": "Optional list of valid move descriptions or tips"
+          }
+        },
+        "required": ["error"]
+      },
+      "DieState": {
+        "type": "string",
+        "enum": ["rolled", "kept", "banked"]
+      },
+      "Die": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "value": { "type": "integer" },
+          "state": { "$ref": "#/components/schemas/DieState" }
+        },
+        "required": ["id", "value", "state"]
+      },
+      "PlayerInfo": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "score": { "type": "integer" },
+          "isMyTurn": { "type": "boolean" }
+        },
+        "required": ["name", "score", "isMyTurn"]
+      },
+      "GameState": {
+        "type": "object",
+        "properties": {
+          "message": { "type": "string" },
+          "status": { "type": "string" },
+          "turnScore": { "type": "integer" },
+          "currentKeepScore": { "type": "integer" },
+          "lastError": { "type": "string", "description": "If the previous move was invalid, this field provides the error message." },
+          "dice": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Die" }
+          },
+          "players": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/PlayerInfo" }
+          }
+        },
+        "required": ["message", "status", "turnScore", "currentKeepScore", "dice", "players"]
+      },
+      "AgentAction": {
+        "type": "string",
+        "enum": ["ROLL", "BANK"]
+      },
+      "AgentMove": {
+        "type": "object",
+        "properties": {
+          "action": { "$ref": "#/components/schemas/AgentAction" },
+          "keepDiceIds": {
+            "type": "array",
+            "items": { "type": "integer" }
+          },
+          "explanation": { "type": "string" }
+        },
+        "required": ["action", "keepDiceIds"]
+      }
+    }
+  }
+}
