@@ -1,8 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { HelpCircle, RefreshCw, Trophy, User, Cpu, ChevronRight, X } from 'lucide-react';
+import { HelpCircle, RefreshCw, Trophy, User, Cpu, ChevronRight, X, Sparkles } from 'lucide-react';
 import { FarkleEngine } from './farkle-engine';
 import ReactMarkdown from 'react-markdown';
 import rulesMd from './FarkleRules.md?raw';
+import { GreedyAgent } from './agents/greedy';
+import { GeminiAgent } from './agents/gemini';
+import { CustomAgent } from './agents/custom';
+import Cookies from 'js-cookie';
+
+// --- AGENTS CONFIG ---
+const agents = {
+    greedy: new GreedyAgent(),
+    gemini: new GeminiAgent(),
+    custom: new CustomAgent()
+};
 
 // --- COMPONENTS ---
 
@@ -62,10 +73,49 @@ const Modal = ({ isOpen, onClose, title, children }) => {
   );
 };
 
+const AgentSelector = ({ selected, onSelect, disabled }) => {
+    const options = [
+        { id: 'human', icon: User, label: 'Human', color: 'text-blue-400' },
+        { id: 'greedy', icon: Cpu, label: 'Greedy', color: 'text-green-400' },
+        { id: 'gemini', icon: Sparkles, label: 'Gemini', color: 'text-purple-400' },
+        { id: 'custom', icon: RefreshCw, label: 'Custom', color: 'text-orange-400' }
+    ];
+
+    return (
+        <div className="flex bg-slate-900/50 rounded-lg p-1 mt-2">
+            {options.map(opt => {
+                const isActive = selected === opt.id;
+                const Icon = opt.icon;
+                return (
+                    <button
+                        key={opt.id}
+                        onClick={() => !disabled && onSelect(opt.id)}
+                        disabled={disabled}
+                        className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-md transition-all text-xs font-bold uppercase tracking-wider
+                            ${isActive ? 'bg-slate-700 shadow-md text-white' : 'text-slate-500 hover:text-slate-300'}
+                            ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                        `}
+                        title={opt.label}
+                    >
+                        <Icon size={16} className={`mb-1 ${isActive ? opt.color : ''}`} />
+                        <span>{opt.label}</span>
+                    </button>
+                );
+            })}
+        </div>
+    );
+};
+
 export default function ZehntausendGame() {
   const engineRef = useRef(new FarkleEngine());
   const [gameState, setGameState] = useState(engineRef.current.getSnapshot());
   const [showRules, setShowRules] = useState(false);
+  const [playerAgents, setPlayerAgents] = useState(['human', 'greedy']); // Default P1: Human, P2: Greedy
+  const [isProcessingTurn, setIsProcessingTurn] = useState(false); // Lock UI processing
+  const [aiStatusMessage, setAiStatusMessage] = useState(null); // For AI feedback (retries, thinking)
+  const [showUriModal, setShowUriModal] = useState(false);
+  const [currentUriPlayerIndex, setCurrentUriPlayerIndex] = useState(null);
+  const [tempUri, setTempUri] = useState('');
 
   // Sync function
   const refresh = () => setGameState(engineRef.current.getSnapshot());
@@ -87,52 +137,149 @@ export default function ZehntausendGame() {
   
   const handleRestart = () => {
       engineRef.current = new FarkleEngine();
+      setIsProcessingTurn(false);
+      setAiStatusMessage(null);
       refresh();
   };
+
+  const setAgentType = (playerIndex, type) => {
+      const newAgents = [...playerAgents];
+      newAgents[playerIndex] = type;
+      setPlayerAgents(newAgents);
+      
+      // Update engine player type for display
+      engineRef.current.players[playerIndex].type = type === 'human' ? 'human' : 'computer';
+      const agentNames = {
+          human: `Player ${playerIndex + 1}`,
+          greedy: 'Greedy Bot',
+          gemini: 'Gemini AI',
+          custom: 'Custom API'
+      };
+      engineRef.current.players[playerIndex].name = agentNames[type];
+
+      if (type === 'custom') {
+          const savedUri = Cookies.get(`custom_agent_uri_p${playerIndex}`) || '';
+          setTempUri(savedUri);
+          setCurrentUriPlayerIndex(playerIndex);
+          setShowUriModal(true);
+      }
+
+      refresh();
+  };
+
+  const saveCustomUri = () => {
+      if (currentUriPlayerIndex !== null) {
+          Cookies.set(`custom_agent_uri_p${currentUriPlayerIndex}`, tempUri, { expires: 365 });
+          setShowUriModal(false);
+          setCurrentUriPlayerIndex(null);
+      }
+  };
+
+  const gameStarted = gameState.players.some(p => p.score > 0) || gameState.currentKeepScore > 0 || gameState.turnScore > 0;
   
-  // AI Loop Hook
+  // LOGIC: Turn Execution Loop
   useEffect(() => {
-    if (gameState.currentPlayerIndex === 1 && gameState.status !== 'win') {
-        const playTurn = async () => {
-            // 1. Wait a bit
-            await new Promise(r => setTimeout(r, 1000));
+    const currentPlayerType = playerAgents[gameState.currentPlayerIndex];
+    if (currentPlayerType !== 'human' && gameState.status !== 'win' && !isProcessingTurn) {
+        
+        const runAgentTurn = async () => {
+            setIsProcessingTurn(true);
+            setAiStatusMessage(null); // Reset status at start of turn
+            const agent = agents[currentPlayerType];
             
-            // 2. Roll & Select
-            engineRef.current.computerMove();
-            refresh();
-            
-            // 3. Handle Result
-            if (engineRef.current.status === 'farkle') {
-                // Farkle: wait and pass
+            try {
+                // Determine if we need to roll first (start of turn)
+                // Actually agent.getNextMove handles "what do I do now?"
+                // BUT: Our engine requires explicit actions.
+                // Standard flow: 
+                // 1. If status is 'rolling' (and new turn or after roll), Agent decides:
+                //    - Select Dice (Keep)
+                //    - Bank OR Roll Again
+                
+                // If it's a fresh turn with no dice rolled yet? 'rolling' status, all dice 'rolled' state?
+                
+                // Let's assume Agent is stateless and we loop until turn passes.
+                
+                // Loop 1 step:
+                if (engineRef.current.message.includes("Farkle")) {
+                    // Auto-pass logic handled elsewhere? No, let's handle everything here for consistency?
+                    // Previous logic had auto-pass useEffect. Let's keep that for Human, but AI needs to handle it?
+                    // Or unified?
+                }
+                
+                // Call Agent
+                const move = await agent.getNextMove(engineRef.current, (msg) => setAiStatusMessage(msg));
+                
+                // UI Delay: "Seeing the move"
+                await new Promise(r => setTimeout(r, 1000));
+                
+                // Execute Keeps
+                if (move.keepDiceIds && move.keepDiceIds.length > 0) {
+                     move.keepDiceIds.forEach(id => {
+                        // Only toggle if not already kept (to avoid toggle off)
+                        const d = engineRef.current.dice.find(x => x.id === id);
+                        if (d && d.state !== 'kept') {
+                            engineRef.current.toggleKeep(id);
+                        }
+                     });
+                     refresh();
+                }
+                 
+                // Explain? (Could add to UI message)
+                if (move.explanation) {
+                    // console.log("AI Explanation:", move.explanation);
+                }
+
+                // UI Delay: "Before Action (Roll/Bank)"
                 await new Promise(r => setTimeout(r, 2000));
-                engineRef.current.passTurn();
-                refresh();
-            } else {
-                // Success: wait and bank
-                await new Promise(r => setTimeout(r, 1500));
-                engineRef.current.bank();
-                refresh();
+                
+                if (move.action === 'ROLL') {
+                     // Check if we CAN roll (Rule enforcement)
+                     if (engineRef.current.currentKeepScore > 0 || engineRef.current.dice.every(d => d.state !== 'rolled')) {
+                         engineRef.current.roll();
+                         refresh();
+                     } else {
+                         // Force bank if AI tried to roll illegally? Or just bank.
+                         engineRef.current.bank();
+                         refresh();
+                     }
+                } else if (move.action === 'BANK') {
+                     engineRef.current.bank();
+                     refresh();
+                }
+                
+            } catch (err) {
+                console.error("Agent Error:", err);
+                setAiStatusMessage("Agent Error: " + (err.message || "Unknown error"));
+                // Do NOT revert to human, just show error.
+            } finally {
+                setIsProcessingTurn(false);
+                setAiStatusMessage(null);
             }
         };
-        playTurn();
-    }
-    // We only trigger this when the player index changes to 1.
-    // We do NOT include gameState.status or dice in dependencies to avoid re-triggering during the async flow.
-  }, [gameState.currentPlayerIndex]);
 
-  // Auto-pass on Farkle for Human
+        runAgentTurn();
+    }
+  }, [gameState.currentPlayerIndex, gameState.status, gameState.dice, playerAgents]); 
+  // Dependency: dice/status change triggers next step of AI turn.
+  // Warning: ensure getNextMove doesn't infinite loop if state doesn't change.
+  // Greedy agent has Delay. Gemini has net latency.
+
+  // Legacy Auto-pass for Farkle (Simplified for all?)
   useEffect(() => {
-    if (gameState.currentPlayerIndex === 0 && gameState.status === 'farkle') {
+    if (gameState.status === 'farkle') {
         const timer = setTimeout(() => {
-            engineRef.current.passTurn(); // Use passTurn directly for Farkle
+            engineRef.current.passTurn();
+            setIsProcessingTurn(false);
+            setAiStatusMessage(null);
             refresh();
-        }, 3000);
+        }, 4000);
         return () => clearTimeout(timer);
     }
-  }, [gameState.currentPlayerIndex, gameState.status]);
+  }, [gameState.status]);
 
   const activePlayer = gameState.players[gameState.currentPlayerIndex];
-  const isHumanTurn = gameState.currentPlayerIndex === 0;
+  const isHumanTurn = playerAgents[gameState.currentPlayerIndex] === 'human';
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 font-sans selection:bg-yellow-500 selection:text-black">
@@ -156,15 +303,29 @@ export default function ZehntausendGame() {
         {/* SCOREBOARD */}
         <div className="grid grid-cols-2 gap-4 md:gap-8">
             {gameState.players.map((p, idx) => (
-                <div key={p.id} className={`p-6 rounded-2xl border-2 transition-all duration-500 
+                <div key={p.id} className={`p-6 rounded-2xl border-2 transition-all duration-500 relative flex flex-col
                     ${gameState.currentPlayerIndex === idx ? 'border-yellow-500 bg-slate-800 shadow-[0_0_20px_rgba(234,179,8,0.2)]' : 'border-transparent bg-slate-800/50'}
                 `}>
                     <div className="flex items-center space-x-3 mb-2 opacity-80">
-                        {p.type === 'human' ? <User className="text-blue-400" /> : <Cpu className="text-red-400" />}
+                         {/* Icon based on CURRENT selection, not p.type which maps to 'computer' generic */}
+                         {playerAgents[idx] === 'human' && <User className="text-blue-400" />}
+                         {playerAgents[idx] === 'greedy' && <Cpu className="text-green-400" />}
+                         {playerAgents[idx] === 'gemini' && <Sparkles className="text-purple-400" />}
+                         {playerAgents[idx] === 'custom' && <RefreshCw className="text-orange-400" />}
+                         
                         <span className="uppercase tracking-widest text-xs font-bold">{p.name}</span>
                     </div>
-                    <div className="text-4xl md:text-5xl font-black font-mono">{p.score.toLocaleString()}</div>
-                    <div className="text-xs text-slate-500 mt-1">Target: 10,000</div>
+                    <div className="text-4xl md:text-5xl font-black font-mono mb-4">{p.score.toLocaleString()}</div>
+                    <div className="text-xs text-slate-500 mb-2">Target: 10,000</div>
+                    
+                    {/* AGENT SELECTION TAB */}
+                    <div className="mt-auto">
+                        <AgentSelector 
+                            selected={playerAgents[idx]} 
+                            onSelect={(type) => setAgentType(idx, type)} 
+                            disabled={gameStarted}
+                        />
+                    </div>
                 </div>
             ))}
         </div>
@@ -188,7 +349,7 @@ export default function ZehntausendGame() {
                             key={d.id} 
                             value={d.value} 
                             state={d.state}
-                            onClick={() => handleKeep(d.id)} 
+                            onClick={() => isHumanTurn && handleKeep(d.id)} 
                         />
                     ))}
                 </div>
@@ -200,7 +361,7 @@ export default function ZehntausendGame() {
                             <>
                                 <button 
                                     onClick={handleRoll}
-                                    disabled={gameState.status === 'farkle'}
+                                    disabled={gameState.status === 'farkle' || (gameState.currentKeepScore === 0 && gameState.dice.some(d => d.state === 'rolled'))}
                                     className={`flex-1 font-bold py-4 rounded-xl shadow-lg transform transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 
                                         ${gameState.dice.every(d => d.state !== 'rolled') 
                                             ? 'bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-white animate-pulse' 
@@ -210,7 +371,7 @@ export default function ZehntausendGame() {
                                     <span>
                                         {gameState.dice.every(d => d.state !== 'rolled') 
                                             ? "HOT HAND! Roll 6!" 
-                                            : (gameState.turnScore > 0 || gameState.currentKeepScore > 0 ? "Roll Remaining" : "Roll Dice")}
+                                            : "Roll Remaining"}
                                     </span>
                                 </button>
                                 
@@ -226,7 +387,13 @@ export default function ZehntausendGame() {
                                 </button>
                             </>
                         ) : (
-                           <div className="text-white/50 text-sm animate-pulse">Computer is thinking...</div>
+                           <div className="text-white/50 text-sm animate-pulse flex items-center space-x-2">
+                                {playerAgents[gameState.currentPlayerIndex] === 'gemini' && <Sparkles size={16} className="text-purple-400" />}
+                                {playerAgents[gameState.currentPlayerIndex] === 'custom' && <RefreshCw size={16} className="text-orange-400 animate-spin-slow" />}
+                               <span>
+                                   {aiStatusMessage ? aiStatusMessage : (playerAgents[gameState.currentPlayerIndex] === 'gemini' ? "Gemini is thinking..." : (playerAgents[gameState.currentPlayerIndex] === 'custom' ? "Calling API..." : "Computer is thinking..."))}
+                               </span>
+                           </div>
                         )}
                         
 
@@ -266,6 +433,45 @@ export default function ZehntausendGame() {
             >
                 {rulesMd}
             </ReactMarkdown>
+        </div>
+      </Modal>
+
+      {/* CUSTOM AGENT URI MODAL */}
+      <Modal 
+        isOpen={showUriModal} 
+        onClose={() => setShowUriModal(false)} 
+        title="Custom Agent Configuration"
+      >
+        <div className="space-y-4">
+          <p className="text-sm">
+            Enter the full URI of your custom agent's endpoint. 
+            The engine will send a POST request with the current game state as JSON.
+          </p>
+          <div className="space-y-2">
+            <label className="text-xs font-bold uppercase text-slate-500">Endpoint URI</label>
+            <input 
+              type="text" 
+              value={tempUri}
+              onChange={(e) => setTempUri(e.target.value)}
+              placeholder="https://your-api.com/move"
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+            />
+          </div>
+          <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+            <h4 className="text-xs font-bold uppercase text-yellow-500 mb-2">Instructions</h4>
+            <ul className="text-xs space-y-2 text-slate-400 list-disc pl-4">
+              <li>Your API must adhere to the <strong>OpenAPI 3.1 specification</strong>.</li>
+              <li>Expected input: <code>GameState</code> JSON.</li>
+              <li>Expected output: <code>AgentMove</code> JSON (e.g. <code>{"{ \"action\": \"ROLL\", \"keepDiceIds\": [0, 2] }"}</code>).</li>
+              <li>Detailed documentation is available in <code>README.md</code> and <code>web-ui/docs/custom-agent-api.json</code>.</li>
+            </ul>
+          </div>
+          <button 
+            onClick={saveCustomUri}
+            className="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl shadow-lg transition-all"
+          >
+            Save Configuration
+          </button>
         </div>
       </Modal>
 

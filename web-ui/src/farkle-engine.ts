@@ -35,11 +35,17 @@ export class FarkleEngine {
             score: 0
         }));
         this.currentPlayerIndex = 0;
-        this.dice = this.createDice();
+        this.dice = Array.from({ length: 6 }, (_, i) => ({
+            id: i,
+            value: 1, // Placeholder
+            state: 'rolled'
+        }));
         this.turnScore = 0;
         this.currentKeepScore = 0;
         this.status = 'rolling';
-        this.message = "Welcome to Farkle! Roll to start.";
+        // Trigger initial roll for the first player
+        this.roll();
+        this.message = "Welcome to Farkle! Your turn.";
     }
 
     private createDice(): Die[] {
@@ -204,10 +210,13 @@ export class FarkleEngine {
         this.currentKeepScore = 0;
         this.currentPlayerIndex = (this.currentPlayerIndex + 1) % this.players.length;
         this.message = `${this.players[this.currentPlayerIndex].name}'s Turn`;
-        this.dice = this.createDice();
+        
+        // Reset dice state to 'rolled' so they can be rolled
+        this.dice.forEach(d => d.state = 'rolled');
         this.status = 'rolling';
         
-        // Let UI trigger computer move if needed
+        // Auto-roll for the new player
+        this.roll();
     }
 
     // --- HELPERS ---

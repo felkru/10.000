@@ -1,16 +1,44 @@
-# React + Vite
+# 10.000 (Farkle) Game
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A web-based implementation of the dice game **10.000** (Farkle), built with React, Vite, and TailwindCSS.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Single Player vs AI**: Play against a "Greedy" bot or the "Gemini" AI agent.
+- **Rule Set**: Strict 10.000 rules with "Hot Hand" and "Doubling" mechanics.
+- **Modular Rules**: Rules are defined in `src/FarkleRules.md`.
 
-## React Compiler
+## Getting Started
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1.  **Install dependencies**:
 
-## Expanding the ESLint configuration
+    ```bash
+    pnpm install
+    ```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+2.  **Setup Environment Variables**:
+    - Create a `.env.local` file in the `web-ui` directory.
+    - Add your Gemini API Key:
+      ```env
+      VITE_GEMINI_API_KEY=your_api_key_here
+      ```
+      _(Note: A `.env` with a demo key has been created or you)_
+
+3.  **Run Development Server**:
+    ```bash
+    pnpm run dev
+    ```
+
+## AI Agents
+
+- **Greedy**: A simple heuristic bot that banks immediately after keeping max points.
+- **Gemini**: Powered by Google's `gemini-3-pro-preview` model via the `@google/genai` SDK.
+- **Custom**: Allows you to connect your own REST API agent. You must provide a URI that adheres to our [OpenAPI 3.1 specification](docs/custom-agent-api.json).
+
+## Custom Agent API
+
+To implement your own agent:
+
+1.  Review the [OpenAPI spec](docs/custom-agent-api.json) for the expected request/response format.
+2.  Your server should expose a `POST /move` (or similar, you provide the full URI) endpoint.
+3.  The engine will send the full `GameState` and expects an `AgentMove` response.
