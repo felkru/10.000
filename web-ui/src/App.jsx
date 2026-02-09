@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { HelpCircle, RefreshCw, Trophy, User, Cpu, ChevronRight, X } from 'lucide-react';
 import { FarkleEngine } from './farkle-engine';
+import ReactMarkdown from 'react-markdown';
+import rulesMd from './FarkleRules.md?raw';
 
 // --- COMPONENTS ---
 
@@ -248,27 +250,22 @@ export default function ZehntausendGame() {
 
       {/* RULES MODAL */}
       <Modal isOpen={showRules} onClose={() => setShowRules(false)} title="Strict Farkle Rules">
-        <div className="space-y-4 text-sm md:text-base">
-            <p>The goal is to reach <strong className="text-yellow-500">10,000 points</strong>. You play with 6 dice.</p>
-            
-            <h3 className="font-bold text-white mt-4">Scoring</h3>
-            <ul className="list-disc pl-5 space-y-1 text-slate-400">
-                <li><span className="text-white">Single 1:</span> 100 points</li>
-                <li><span className="text-white">Single 5:</span> 50 points</li>
-                <li><span className="text-white">Three 1s:</span> 1,000 points</li>
-                <li><span className="text-white">Three Xs:</span> X * 100 (e.g., three 2s = 200)</li>
-                <li><span className="text-white">Doubling:</span> 4-of-a-kind doubles the 3-kind score. 5-of-a-kind doubles again. 6-of-a-kind doubles again.</li>
-            </ul>
-
-            <h3 className="font-bold text-white mt-4">How to Play</h3>
-            <ol className="list-decimal pl-5 space-y-2 text-slate-400">
-                <li>Roll the dice. Tap dice to <span className="text-yellow-500">Keep</span> them.</li>
-                <li><strong>Triples:</strong> Selecting one die of a triple will auto-select the others.</li>
-                <li>You can only keep scoring dice!</li>
-                <li><span className="text-green-400">Bank</span> points to end turn, or <span className="text-yellow-500">Roll Remaining</span> to risk it for more.</li>
-                <li><strong>Farkle:</strong> If you roll and get no points, you lose the turn's score!</li>
-                <li><strong>Hot Hand:</strong> If you use all 6 dice, you MUST <span className="text-yellow-500 font-bold">Roll All 6</span> again to continue accumulating!</li>
-            </ol>
+        <div className="text-sm md:text-base rule-content space-y-4">
+            <ReactMarkdown
+                components={{
+                    h3: ({node, ...props}) => <h3 className="font-bold text-white mt-4 text-lg" {...props} />,
+                    ul: ({node, ...props}) => <ul className="list-disc pl-5 space-y-1 text-slate-400" {...props} />,
+                    ol: ({node, ...props}) => <ol className="list-decimal pl-5 space-y-2 text-slate-400" {...props} />,
+                    li: ({node, children, ...props}) => {
+                        // Custom logic to color "Keys": check if children starts with strong?
+                        return <li {...props}>{children}</li>
+                    },
+                    strong: ({node, ...props}) => <strong className="text-yellow-500" {...props} />,
+                    p: ({node, ...props}) => <p className="text-slate-300" {...props} />
+                }}
+            >
+                {rulesMd}
+            </ReactMarkdown>
         </div>
       </Modal>
 
