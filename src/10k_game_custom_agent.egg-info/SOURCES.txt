@@ -1,0 +1,9 @@
+README.md
+pyproject.toml
+setup.py
+src/bindings.cpp
+src/10k_game_custom_agent.egg-info/PKG-INFO
+src/10k_game_custom_agent.egg-info/SOURCES.txt
+src/10k_game_custom_agent.egg-info/dependency_links.txt
+src/10k_game_custom_agent.egg-info/requires.txt
+src/10k_game_custom_agent.egg-info/top_level.txt
